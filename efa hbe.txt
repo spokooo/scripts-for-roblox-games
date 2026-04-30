@@ -1,0 +1,184 @@
+-- services
+local CollectionService = game:GetService("CollectionService")
+local UserInputService = game:GetService("UserInputService")
+
+-- vars
+local balls = {}
+local customRadius = 3
+
+-- keybind
+local toggleKey = Enum.KeyCode.LeftControl
+local menuVisible = true
+
+-- ball counter
+local function getBallCount()
+    local count = 0
+    for _ in pairs(balls) do
+        count += 1
+    end
+    return count
+end
+
+-- ball detect (name based)
+local function isBall(obj)
+    return (obj:IsA("Part") or obj:IsA("MeshPart")) 
+        and string.lower(obj.Name) == "ball"
+end
+
+local function tagBall(ball)
+    if not CollectionService:HasTag(ball, "Ball") then
+        CollectionService:AddTag(ball, "Ball")
+    end
+end
+
+-- hitbox hook
+local old
+old = hookmetamethod(game, "__namecall", function(self, ...)
+    local args = {...}
+    local method = getnamecallmethod()
+
+    if not checkcaller() and self == workspace then
+
+        -- box expand
+        if method == "GetPartBoundsInBox" then
+            if args[2] and typeof(args[2]) == "Vector3" then
+                args[2] = Vector3.new(customRadius, customRadius, customRadius)
+                return old(self, unpack(args))
+            end
+        end
+
+        -- radius expand
+        if method == "GetPartBoundsInRadius" then
+            if args[2] and typeof(args[2]) == "number" then
+                args[2] = customRadius
+                return old(self, unpack(args))
+            end
+        end
+
+        -- raycast tweak
+        if method == "Raycast" then
+            if args[3] then
+                local params = args[3]
+                if typeof(params) == "RaycastParams" then
+                    params.FilterType = Enum.RaycastFilterType.Blacklist
+                end
+            end
+        end
+    end
+
+    return old(self, ...)
+end)
+
+-- ui setup
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+local Window = Fluent:CreateWindow({
+    Title = "efa hbe",
+    SubTitle = "by spoko",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = nil
+})
+
+local Tabs = {
+    Main = Window:AddTab({ Title = "Main", Icon = "home" })
+}
+
+local BallCounter = Tabs.Main:AddParagraph({
+    Title = "ball counter",
+    Content = "balls found: 0"
+})
+
+local function updateUI()
+    BallCounter:SetDesc("balls found: " .. tostring(getBallCount()))
+end
+
+-- slider
+Tabs.Main:AddSlider("RadiusSlider", {
+    Title = "hitbox radius",
+    Description = "increases detection size",
+    Default = 3,
+    Min = 1,
+    Max = 50,
+    Rounding = 1,
+    Callback = function(Value)
+        customRadius = Value
+    end
+})
+
+-- keybind set
+Tabs.Main:AddButton({
+    Title = "set keybind",
+    Description = "press any key to bind",
+    Callback = function()
+
+        Fluent:Notify({
+            Title = "keybind",
+            Content = "press a key",
+            Duration = 3
+        })
+
+        local connection
+        connection = UserInputService.InputBegan:Connect(function(input, gpe)
+            if gpe then return end
+
+            toggleKey = input.KeyCode
+
+            Fluent:Notify({
+                Title = "key set",
+                Content = "bound to " .. tostring(toggleKey),
+                Duration = 3
+            })
+
+            connection:Disconnect()
+        end)
+    end
+})
+
+-- toggle ui
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+
+    if input.KeyCode == toggleKey then
+        menuVisible = not menuVisible
+        Window:Minimize(not menuVisible)
+    end
+end)
+
+-- ball tracking
+workspace.DescendantAdded:Connect(function(obj)
+    if isBall(obj) then
+        tagBall(obj)
+        balls[obj] = true
+        updateUI()
+    end
+end)
+
+workspace.DescendantRemoving:Connect(function(obj)
+    if balls[obj] then
+        balls[obj] = nil
+        updateUI()
+    end
+end)
+
+-- initial scan
+for _, obj in pairs(workspace:GetDescendants()) do
+    if isBall(obj) then
+        tagBall(obj)
+        balls[obj] = true
+    end
+end
+
+updateUI()
+
+Fluent:Notify({
+    Title = "loaded",
+    Content = "ball tracker running",
+    Duration = 5
+})
+
+-- adonis bypass
+
+local getinfo = getinfo or debug.getinfo local DEBUG = false local Hooked = {} local Detected, Kill setthreadidentity(2) for i, v in getgc(true) do if typeof(v) == "table" then local DetectFunc = rawget(v, "Detected") local KillFunc = rawget(v, "Kill") if typeof(DetectFunc) == "function" and not Detected then Detected = DetectFunc local Old; Old = hookfunction(Detected, function(Action, Info, NoCrash) if Action ~= "_" then if DEBUG then warn("Adonis flag: ", Action, Info) end end return true end) table.insert(Hooked, Detected) end if rawget(v, "Variables") and rawget(v, "Process") and typeof(KillFunc) == "function" and not Kill then Kill = KillFunc local Old; Old = hookfunction(Kill, function(Info) if DEBUG then warn("Adonis kill attempt: ", Info) end end) table.insert(Hooked, Kill) end end end local Old; Old = hookfunction(getrenv().debug.info, newcclosure(function(...) local LevelOrFunc = ... if Detected and LevelOrFunc == Detected then if DEBUG then warn("Adonis sanity check blocked") end return coroutine.yield(coroutine.running()) end return Old(...) end)) setthreadidentity(7)
