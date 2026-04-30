@@ -1,0 +1,163 @@
+local CollectionService = game:GetService("CollectionService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+-- Ball detection criteria
+local ballColor = Color3.fromRGB(163, 162, 165)
+local ballSize = Vector3.new(2.25, 2.25, 2.25)
+
+local balls = {}
+local customRadius = 3
+
+-- KEYBIND SYSTEM
+local toggleKey = Enum.KeyCode.LeftControl
+local menuVisible = true
+
+-- Improved Count Function
+local function getBallCount()
+    local count = 0
+    for _ in pairs(balls) do
+        count += 1
+    end
+    return count
+end
+
+local function isBall(obj)
+    if not obj:IsA("Part") then return false end
+    
+    local sizeDiff = (obj.Size - ballSize).Magnitude
+    if sizeDiff > 0.01 then return false end
+    
+    local rDiff = math.abs(obj.Color.R - ballColor.R)
+    local gDiff = math.abs(obj.Color.G - ballColor.G)
+    local bDiff = math.abs(obj.Color.B - ballColor.B)
+    
+    return rDiff <= 0.01 and gDiff <= 0.01 and bDiff <= 0.01
+end
+
+local function tagBall(ball)
+    if not CollectionService:HasTag(ball, "Ball") then
+        CollectionService:AddTag(ball, "Ball")
+    end
+end
+
+-- Hooking logic
+local old
+old = hookmetamethod(game, "__namecall", function(self, ...)
+    local args = {...}
+    local method = getnamecallmethod()
+    
+    if not checkcaller() and self == workspace and method == "GetPartBoundsInBox" then
+        if args[2] and typeof(args[2]) == "Vector3" and args[2].X <= 2.5 then
+            args[2] = Vector3.new(customRadius, customRadius, customRadius)
+            return old(self, unpack(args))
+        end
+    end
+    
+    return old(self, ...)
+end)
+
+-- UI Setup
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local Window = Fluent:CreateWindow({
+    Title = "gca hbe",
+    SubTitle = "by spoko",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = nil
+})
+
+local Tabs = { Main = Window:AddTab({ Title = "Main", Icon = "home" }) }
+
+local BallCounterParagraph = Tabs.Main:AddParagraph({
+    Title = "Ball Counter",
+    Content = "Balls Found: 0"
+})
+
+-- Update UI
+local function updateUI()
+    local count = getBallCount()
+    BallCounterParagraph:SetDesc("Balls Found: " .. tostring(count))
+end
+
+-- Slider
+Tabs.Main:AddSlider("RadiusSlider", {
+    Title = "Hitbox Radius",
+    Description = "Increases the detection size",
+    Default = 3, Min = 1, Max = 50, Rounding = 1,
+    Callback = function(Value)
+        customRadius = Value
+    end
+})
+
+-- KEYBIND PICKER
+Tabs.Main:AddButton({
+    Title = "Set Keybind",
+    Description = "Click and press any key...",
+    Callback = function()
+        Fluent:Notify({
+            Title = "Keybind",
+            Content = "Press a key...",
+            Duration = 3
+        })
+
+        local connection
+        connection = UserInputService.InputBegan:Connect(function(input, gpe)
+            if gpe then return end
+            
+            toggleKey = input.KeyCode
+            
+            Fluent:Notify({
+                Title = "Keybind Set",
+                Content = "New key: " .. tostring(toggleKey),
+                Duration = 3
+            })
+
+            connection:Disconnect()
+        end)
+    end
+})
+
+-- TOGGLE MENU
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    
+    if input.KeyCode == toggleKey then
+        menuVisible = not menuVisible
+        Window:Minimize(not menuVisible)
+    end
+end)
+
+-- Signals
+CollectionService:GetInstanceAddedSignal("Ball"):Connect(function(part)
+    balls[part] = true
+    updateUI()
+end)
+
+CollectionService:GetInstanceRemovedSignal("Ball"):Connect(function(part)
+    balls[part] = nil
+    updateUI()
+end)
+
+-- Tracking Loop
+workspace.DescendantAdded:Connect(function(obj)
+    task.wait(0.1)
+    if isBall(obj) then tagBall(obj) end
+end)
+
+-- Initial Scan
+for _, obj in pairs(workspace:GetDescendants()) do
+    if isBall(obj) then 
+        tagBall(obj) 
+        balls[obj] = true
+    end
+end
+updateUI()
+
+Fluent:Notify({
+    Title = "System Loaded",
+    Content = "Ball tracker active.",
+    Duration = 5
+})
